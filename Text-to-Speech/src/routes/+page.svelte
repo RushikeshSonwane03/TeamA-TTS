@@ -3,7 +3,7 @@
 </script>
 
 <script>
-   import { onMount } from 'svelte';
+  import { onMount } from 'svelte';
 
   let synthesis;
   let voices = [];
@@ -13,17 +13,26 @@
   let volume = 1;
   let mediaRecorder;
   let audioChunks = [];
-  let textToSpeak = ''; // Declare textToSpeak variable
+  let textToSpeak = '';
+  let isFirstClick = true; // Flag to track the first click
+  let isRecording = false; // Flag to track the recording state
 
   function getVoices() {
-    return new Promise(resolve => {
-      synthesis = window.speechSynthesis;
-      synthesis.onvoiceschanged = () => {
-        voices = synthesis.getVoices();
-        resolve();
-      };
-    });
-  }
+  return new Promise(resolve => {
+    synthesis = window.speechSynthesis;
+    synthesis.onvoiceschanged = () => {
+      voices = synthesis.getVoices();
+      
+      // Log available voices to the console for debugging
+      console.log(voices);
+      
+      // Filter out problematic voices or set a default voice as fallback
+      voices = voices.filter(voice => !voice.name.includes('Problematic Voice')); // Replace 'Problematic Voice' with the actual name causing issues
+      
+      resolve();
+    };
+  });
+}
 
   onMount(async () => {
     await getVoices();
@@ -32,18 +41,23 @@
   function startRecording() {
     audioChunks = [];
     mediaRecorder.start();
+    isRecording = true; // Set recording state to true when starting the recording
   }
 
   function stopRecording() {
-    mediaRecorder.stop();
-    mediaRecorder.onstop = () => {
-      const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const downloadLink = document.createElement('a');
-      downloadLink.href = audioUrl;
-      downloadLink.download = 'text-to-speech.wav';
-      downloadLink.click();
-    };
+    if (isRecording) {
+      mediaRecorder.stop();
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const downloadLink = document.createElement('a');
+        downloadLink.href = audioUrl;
+        downloadLink.download = 'text-to-speech.wav';
+        downloadLink.click();
+        isRecording = false; // Set recording state to false after stopping the recording
+        isFirstClick = true; // Reset isFirstClick flag to true after stopping the recording
+      };
+    }
   }
 
   function speak() {
@@ -56,7 +70,6 @@
       utterance.voice = selectedVoice;
     }
 
-    mediaRecorder.start();
     synthesis.speak(utterance);
   }
 
@@ -97,6 +110,20 @@
       console.error('MediaRecorder not supported in this browser.');
     }
   });
+
+
+  function speakAndRecord() {
+    if (!isFirstClick) {
+      speak(); // Speak the text only if it's not the first click
+    }
+
+    if (isFirstClick) {
+      startRecording(); // Start audio recording only on the first click
+      speak();
+      isFirstClick = false; // Set the flag to false after the first click
+    }
+  }
+
 </script>
 
 <main>
@@ -127,7 +154,8 @@
     {/each}
   </select>
 
-  <button on:click={speak} style="background-color: purple; color: white; padding: 14px 20px; border: none; cursor: pointer; border-radius: 5px; font-size: 16px; margin-right: 10px;">Speak</button>
+  <button on:click={speakAndRecord} style="background-color: purple; color: white; padding: 14px 20px; border: none; cursor: pointer; border-radius: 5px; font-size: 16px; margin-right: 10px;">Speak</button>
+
   <br>
   <br>
   <button on:click={stopRecording} style="background-color: purple; color: white; padding: 14px 20px; border: none; cursor: pointer; border-radius: 5px; font-size: 16px;">Save Audio</button>
